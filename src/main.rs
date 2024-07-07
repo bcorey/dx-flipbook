@@ -142,9 +142,83 @@ impl Stopwatch {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+enum Easing {
+    Linear,
+    BackIn,
+    BackInOut,
+    BackOut,
+    BounceIn,
+    BounceInOut,
+    BounceOut,
+    CircIn,
+    CircInOut,
+    CircOut,
+    CubicIn,
+    CubicInOut,
+    CubicOut,
+    ElasticIn,
+    ElasticInOut,
+    ElasticOut,
+    ExpoIn,
+    ExpoInOut,
+    ExpoOut,
+    QuadIn,
+    QuadInOut,
+    QuadOut,
+    QuartIn,
+    QuartInOut,
+    QuartOut,
+    QuintIn,
+    QuintInOut,
+    QuintOut,
+    SineIn,
+    SineInOut,
+    SineOut,
+}
+
+impl Easing {
+    fn ease(&self, t: f32) -> f32 {
+        match self {
+            Self::Linear => simple_easing::linear(t),
+            Self::BackIn => simple_easing::back_in(t),
+            Self::BackInOut => simple_easing::back_in_out(t),
+            Self::BackOut => simple_easing::back_out(t),
+            Self::BounceIn => simple_easing::bounce_in(t),
+            Self::BounceInOut => simple_easing::bounce_in_out(t),
+            Self::BounceOut => simple_easing::bounce_out(t),
+            Self::CircIn => simple_easing::circ_in(t),
+            Self::CircInOut => simple_easing::circ_in_out(t),
+            Self::CircOut => simple_easing::circ_out(t),
+            Self::CubicIn => simple_easing::cubic_in(t),
+            Self::CubicInOut => simple_easing::cubic_in_out(t),
+            Self::CubicOut => simple_easing::cubic_out(t),
+            Self::ElasticIn => simple_easing::elastic_in(t),
+            Self::ElasticInOut => simple_easing::elastic_in_out(t),
+            Self::ElasticOut => simple_easing::elastic_out(t),
+            Self::ExpoIn => simple_easing::expo_in(t),
+            Self::ExpoInOut => simple_easing::expo_in_out(t),
+            Self::ExpoOut => simple_easing::expo_out(t),
+            Self::QuadIn => simple_easing::quad_in(t),
+            Self::QuadInOut => simple_easing::quad_in_out(t),
+            Self::QuadOut => simple_easing::quad_out(t),
+            Self::QuartIn => simple_easing::quart_in(t),
+            Self::QuartInOut => simple_easing::quart_in_out(t),
+            Self::QuartOut => simple_easing::quart_out(t),
+            Self::QuintIn => simple_easing::quint_in(t),
+            Self::QuintInOut => simple_easing::quint_in(t),
+            Self::QuintOut => simple_easing::quint_out(t),
+            Self::SineIn => simple_easing::sine_in(t),
+            Self::SineInOut => simple_easing::sine_in_out(t),
+            Self::SineOut => simple_easing::sine_out(t),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
 struct AnimationTransition {
     from: RectData,
     to: RectData,
+    easing: Easing,
     start_delay: Option<web_time::Duration>,
     duration: web_time::Duration,
     min_frame_duration: web_time::Duration,
@@ -152,11 +226,12 @@ struct AnimationTransition {
 }
 
 impl AnimationTransition {
-    fn new(from: RectData, to: RectData, duration: web_time::Duration) -> Self {
+    fn new(from: RectData, to: RectData, duration: web_time::Duration, easing: Easing) -> Self {
         let min_frame_duration = Self::get_frame_duration_from_refresh_rate(MAX_RATE_60HZ);
         Self {
             from,
             to,
+            easing,
             start_delay: None,
             duration,
             min_frame_duration,
@@ -211,7 +286,7 @@ impl AnimationTransition {
         let from = RectData::new(0f64, 0f64, 200f64, 200f64);
         let to = RectData::new(400f64, 0f64, 200f64, 200f64);
         let duration = web_time::Duration::from_millis(1000);
-        Self::new(from, to, duration)
+        Self::new(from, to, duration, Easing::BounceOut)
     }
 }
 
@@ -236,8 +311,14 @@ impl AnimationController {
     //     self.animation = Some(AnimationTransition::new( rect))
     // }
 
-    fn animate(&mut self, from: RectData, to: RectData, duration: web_time::Duration) {
-        self.animation = Some(AnimationTransition::new(from, to, duration));
+    fn animate(
+        &mut self,
+        from: RectData,
+        to: RectData,
+        duration: web_time::Duration,
+        easing: Easing,
+    ) {
+        self.animation = Some(AnimationTransition::new(from, to, duration, easing));
     }
 
     fn to_400(&mut self) {
@@ -353,7 +434,9 @@ fn Animatable(controller: Signal<AnimationController>, children: Element) -> Ele
                 let from = current_rect.read().as_ref().unwrap().clone();
                 let to = animation.from;
                 let duration = web_time::Duration::from_millis(1000);
-                controller.write().animate(from, to, duration);
+                controller
+                    .write()
+                    .animate(from, to, duration, animation.easing);
                 controller.write().command = AnimationCommand::Play;
                 anim_handle.write().as_mut().map(|handle| handle.cancel());
                 spawn_animation(controller.read().animation.as_ref().unwrap().clone());
