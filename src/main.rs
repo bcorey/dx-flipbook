@@ -82,54 +82,66 @@ impl RectSize {
     }
 }
 
+const MAX_RATE_60HZ: u64 = 60;
 #[derive(Clone, PartialEq, Debug)]
 struct AnimationTransition {
     from: RectData,
     to: RectData,
-    current: RectData,
+    duration: web_time::Duration,
+    min_frame_duration: web_time::Duration,
+    linear_progress: f32,
     start_time: web_time::SystemTime,
     state: AnimationPlayState,
 }
 
 impl AnimationTransition {
     fn new(from: RectData, to: RectData) -> Self {
-        let current = from.clone();
-
+        let min_frame_duration = Self::get_frame_duration_from_refresh_rate(MAX_RATE_60HZ);
         Self {
             from,
             to,
-            current,
+            duration: web_time::Duration::from_millis(500u64),
+            min_frame_duration,
+            linear_progress: 0f32,
             start_time: web_time::SystemTime::now(),
             state: AnimationPlayState::Play,
         }
     }
 
-    async fn step(&self) -> RectData {
+    #[allow(unused)]
+    fn with_refresh_rate(mut self, max_refresh_rate: u64) -> Self {
+        self.min_frame_duration = Self::get_frame_duration_from_refresh_rate(max_refresh_rate);
+        self
+    }
+
+    fn get_frame_duration_from_refresh_rate(max_refresh_rate: u64) -> Duration {
+        Duration::from_millis(1000 / max_refresh_rate)
+    }
+
+    async fn step(&mut self) -> RectData {
         let frame_start = web_time::SystemTime::now();
-        let max_time = web_time::Duration::from_millis(500u64);
-        let elapsed = self
+        let total_elapsed = self
             .start_time
             .elapsed()
             .expect("could not get elapsed time since animation start");
 
-        tracing::info!("stepped");
-        if elapsed >= max_time {
+        if total_elapsed >= self.duration {
             return self.to.clone();
         }
 
-        let linear_progress = elapsed.as_secs_f64() / max_time.as_secs_f64();
-        let percent = simple_easing::bounce_out(linear_progress as f32) as f64;
+        self.linear_progress = (total_elapsed.as_secs_f64() / self.duration.as_secs_f64()) as f32;
+        let interpolated_progress = simple_easing::bounce_out(self.linear_progress) as f64;
+
         let mut current_rect = self.from.clone();
-        let x_diff = self.to.position.x - self.from.position.x;
-        current_rect.position.x += x_diff * percent;
+        let total_x_diff = self.to.position.x - self.from.position.x;
+        current_rect.position.x += total_x_diff * interpolated_progress;
 
         let frame_duration = frame_start
             .elapsed()
             .expect("couldn't get elapsed time during frame");
 
-        let min_frame_duration = Duration::from_millis(8);
-        if frame_duration < min_frame_duration {
-            let delay_duration = min_frame_duration.as_millis() - frame_duration.as_millis();
+        if frame_duration < self.min_frame_duration {
+            let delay_duration = self.min_frame_duration.as_millis() - frame_duration.as_millis();
             let delay = gloo_timers::future::sleep(Duration::from_millis(delay_duration as u64));
             delay.await;
         }
@@ -194,7 +206,7 @@ fn Animatable(animation: Signal<AnimatableState>, children: Element) -> Element 
                     tracing::info!("some transition");
                     let handle = spawn({
                         let mut current_rect = current_rect.to_owned();
-                        let animation = animation.to_owned();
+                        let mut animation = animation.to_owned();
                         async move {
                             current_rect.set(Some(animation.from.clone()));
                             while current_rect.read().as_ref().unwrap() != &animation.to {
