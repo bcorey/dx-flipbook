@@ -36,6 +36,14 @@ fn App() -> Element {
             onclick: move |_| animation_controller.write().pause(),
             "pause"
         }
+        button {
+            onclick: move |_| animation_controller.write().reverse(),
+            "reverse"
+        }
+        button {
+            onclick: move |_| animation_controller.write().rest(),
+            "rest"
+        }
     }
 }
 
@@ -144,16 +152,21 @@ struct AnimationTransition {
 }
 
 impl AnimationTransition {
-    fn new(from: RectData, to: RectData) -> Self {
+    fn new(from: RectData, to: RectData, duration: web_time::Duration) -> Self {
         let min_frame_duration = Self::get_frame_duration_from_refresh_rate(MAX_RATE_60HZ);
         Self {
             from,
             to,
-            start_delay: Some(web_time::Duration::from_millis(1000u64)),
-            duration: web_time::Duration::from_millis(1000u64),
+            start_delay: None,
+            duration,
             min_frame_duration,
             linear_progress: 0f32,
         }
+    }
+
+    fn with_delay(mut self, duration: web_time::Duration) -> Self {
+        self.start_delay = Some(duration);
+        self
     }
 
     #[allow(unused)]
@@ -169,6 +182,7 @@ impl AnimationTransition {
     async fn step(&mut self, total_elapsed: web_time::Duration) -> RectData {
         let frame_start = web_time::SystemTime::now();
         tracing::info!("total elapsed time: {:?}", total_elapsed);
+        tracing::info!("animation: {:?}", self);
         if total_elapsed >= self.duration {
             return self.to.clone();
         }
@@ -196,7 +210,8 @@ impl AnimationTransition {
     fn move_x_linear() -> Self {
         let from = RectData::new(0f64, 0f64, 200f64, 200f64);
         let to = RectData::new(400f64, 0f64, 200f64, 200f64);
-        Self::new(from, to)
+        let duration = web_time::Duration::from_millis(1000);
+        Self::new(from, to, duration)
     }
 }
 
@@ -210,7 +225,7 @@ impl Default for AnimationController {
     fn default() -> Self {
         Self {
             animation: None,
-            command: AnimationCommand::Play,
+            command: AnimationCommand::Rest,
         }
     }
 }
@@ -220,6 +235,10 @@ impl AnimationController {
     //     let from =
     //     self.animation = Some(AnimationTransition::new( rect))
     // }
+
+    fn animate(&mut self, from: RectData, to: RectData, duration: web_time::Duration) {
+        self.animation = Some(AnimationTransition::new(from, to, duration));
+    }
 
     fn to_400(&mut self) {
         self.animation = Some(AnimationTransition::move_x_linear());
@@ -236,6 +255,14 @@ impl AnimationController {
     fn pause(&mut self) {
         self.command = AnimationCommand::Pause;
     }
+
+    fn reverse(&mut self) {
+        self.command = AnimationCommand::Reverse;
+    }
+
+    fn rest(&mut self) {
+        self.command = AnimationCommand::Rest;
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -243,6 +270,8 @@ enum AnimationCommand {
     Play,
     Pause,
     Abort,
+    Reverse,
+    Rest,
 }
 
 #[component]
@@ -251,42 +280,50 @@ fn Animatable(controller: Signal<AnimationController>, children: Element) -> Ele
     let mut transition: Signal<Option<AnimationTransition>> = use_signal(|| None);
     let mut stopwatch = use_signal(|| Stopwatch::new());
     let mut delay_stopwatch = use_signal(|| Stopwatch::new());
-    let current_rect: Signal<Option<RectData>> = use_signal(|| None);
+    let mut current_rect: Signal<Option<RectData>> = use_signal(|| None);
 
-    use_effect(move || match controller.read().command {
+    let mut spawn_animation = move |mut current_transition: AnimationTransition| {
+        let handle = spawn(async move {
+            if let Some(start_delay) = &current_transition.start_delay {
+                delay_stopwatch.write().start();
+                let delay = gloo_timers::future::sleep(*start_delay);
+                delay.await;
+            }
+            stopwatch.write().start();
+            current_rect.set(Some(current_transition.from.clone()));
+            while current_rect.read().as_ref().unwrap() != &current_transition.to {
+                let elapsed = stopwatch.write().get_elapsed();
+                current_rect.set(Some(current_transition.step(elapsed).await));
+            }
+            anim_handle.set(None);
+            //transition.set(None);
+            stopwatch.write().clear();
+            delay_stopwatch.write().clear();
+            controller.write().command = AnimationCommand::Rest;
+        });
+        anim_handle.set(Some(handle));
+    };
+
+    let mut clear_hooks = move || {
+        anim_handle.write().as_mut().map(|handle| handle.cancel());
+        anim_handle.set(None);
+
+        transition.set(None);
+        stopwatch.write().clear();
+        delay_stopwatch.write().clear();
+    };
+
+    use_effect(move || match controller().command {
         AnimationCommand::Play => {
             if let Some(anim) = &controller.read().animation {
                 if transition.read().is_none() {
                     transition.set(Some(anim.clone()));
-                    if let Some(mut current_transition) = transition() {
-                        let handle = spawn({
-                            let mut current_rect = current_rect.to_owned();
-                            async move {
-                                if let Some(start_delay) = &current_transition.start_delay {
-                                    tracing::info!("SOME DELAY");
-                                    delay_stopwatch.write().start();
-                                    let delay = gloo_timers::future::sleep(*start_delay);
-                                    delay.await;
-                                }
-                                stopwatch.write().start();
-                                current_rect.set(Some(current_transition.from.clone()));
-                                while current_rect.read().as_ref().unwrap()
-                                    != &current_transition.to
-                                {
-                                    let elapsed = stopwatch.write().get_elapsed();
-                                    current_rect.set(Some(current_transition.step(elapsed).await));
-                                }
-                                anim_handle.set(None);
-                                transition.set(None);
-                                stopwatch.write().clear();
-                                delay_stopwatch.write().clear();
-                                tracing::warn!("ENDED TRANSITION");
-                            }
-                        });
-                        anim_handle.set(Some(handle));
-                    }
+                    spawn_animation(anim.clone());
+                    tracing::info!("command: play: new animation");
                 } else {
-                    if let Some(active_transition) = transition() {
+                    tracing::info!("command: play: paused animation");
+
+                    if let Some(_animation) = transition() {
                         anim_handle.write().as_mut().map(|handle| handle.resume());
                         stopwatch.write().start();
                     }
@@ -311,6 +348,19 @@ fn Animatable(controller: Signal<AnimationController>, children: Element) -> Ele
                 delay_stopwatch.write().clear();
             }
         }
+        AnimationCommand::Reverse => {
+            if let Some(animation) = transition() {
+                let from = current_rect.read().as_ref().unwrap().clone();
+                let to = animation.from;
+                let duration = web_time::Duration::from_millis(1000);
+                controller.write().animate(from, to, duration);
+                controller.write().command = AnimationCommand::Play;
+                anim_handle.write().as_mut().map(|handle| handle.cancel());
+                spawn_animation(controller.read().animation.as_ref().unwrap().clone());
+                tracing::info!("command: reverse");
+            }
+        }
+        AnimationCommand::Rest => clear_hooks(),
     });
 
     let render_state = use_memo(move || {
