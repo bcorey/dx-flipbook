@@ -263,7 +263,7 @@ impl AnimationTransition {
         }
 
         self.linear_progress = (total_elapsed.as_secs_f64() / self.duration.as_secs_f64()) as f32;
-        let interpolated_progress = simple_easing::bounce_out(self.linear_progress) as f64;
+        let interpolated_progress = self.easing.ease(self.linear_progress) as f64;
 
         let mut current_rect = self.from.clone();
         let total_x_diff = self.to.position.x - self.from.position.x;
@@ -286,7 +286,7 @@ impl AnimationTransition {
         let from = RectData::new(0f64, 0f64, 200f64, 200f64);
         let to = RectData::new(400f64, 0f64, 200f64, 200f64);
         let duration = web_time::Duration::from_millis(1000);
-        Self::new(from, to, duration, Easing::BounceOut)
+        Self::new(from, to, duration, Easing::BackOut)
     }
 }
 
