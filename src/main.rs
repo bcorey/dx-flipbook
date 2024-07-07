@@ -12,21 +12,29 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let mut animatable = use_signal(|| AnimatableState::default());
+    let mut animation_controller = use_signal(|| AnimationController::default());
     rsx! {
         Animatable {
-            animation: animatable,
+            controller: animation_controller,
             div {
                 style: "background-color: red; width: 100%; height: 100%;",
             }
         }
         button {
-            onclick: move |_| animatable.write().to_400(),
+            onclick: move |_| animation_controller.write().to_400(),
             "animate"
         }
         button {
-            onclick: move |_| animatable.write().toggle_play_state(),
-            "play/pause"
+            onclick: move |_| animation_controller.write().abort(),
+            "abort"
+        }
+        button {
+            onclick: move |_| animation_controller.write().play(),
+            "play"
+        }
+        button {
+            onclick: move |_| animation_controller.write().pause(),
+            "pause"
         }
     }
 }
@@ -85,12 +93,6 @@ impl RectSize {
 const MAX_RATE_60HZ: u64 = 60;
 
 #[derive(Clone, PartialEq, Debug)]
-struct AnimationDelay {
-    delay_start_time: web_time::SystemTime,
-    duration: web_time::Duration,
-}
-
-#[derive(Clone, PartialEq, Debug)]
 struct Stopwatch {
     lap_start: Option<web_time::SystemTime>,
     elapsed: web_time::Duration,
@@ -135,7 +137,7 @@ impl Stopwatch {
 struct AnimationTransition {
     from: RectData,
     to: RectData,
-    start_delay: Option<AnimationDelay>,
+    start_delay: Option<web_time::Duration>,
     duration: web_time::Duration,
     min_frame_duration: web_time::Duration,
     linear_progress: f32,
@@ -147,7 +149,7 @@ impl AnimationTransition {
         Self {
             from,
             to,
-            start_delay: None,
+            start_delay: Some(web_time::Duration::from_millis(1000u64)),
             duration: web_time::Duration::from_millis(1000u64),
             min_frame_duration,
             linear_progress: 0f32,
@@ -191,23 +193,6 @@ impl AnimationTransition {
         current_rect
     }
 
-    async fn start_delay(&mut self) {
-        if let Some(start_delay) = &self.start_delay {
-            let delay = gloo_timers::future::sleep(start_delay.duration);
-            // start_delay.delay_start_time = web_time::SystemTime::now();
-            // delay.await;
-        }
-    }
-
-    fn cancel_if_during_start_delay(&self) {
-        if let Some(start_delay) = &self.start_delay {
-            let elapsed = start_delay.delay_start_time.elapsed().unwrap();
-            if elapsed < start_delay.duration {
-                tracing::info!("can cancel");
-            }
-        }
-    }
-
     fn move_x_linear() -> Self {
         let from = RectData::new(0f64, 0f64, 200f64, 200f64);
         let to = RectData::new(400f64, 0f64, 200f64, 200f64);
@@ -216,62 +201,73 @@ impl AnimationTransition {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct AnimatableState {
+struct AnimationController {
     animation: Option<AnimationTransition>,
-    play_state: AnimationPlayState,
+    command: AnimationCommand,
 }
 
-impl Default for AnimatableState {
+impl Default for AnimationController {
     fn default() -> Self {
         Self {
             animation: None,
-            play_state: AnimationPlayState::Play,
+            command: AnimationCommand::Play,
         }
     }
 }
 
-impl AnimatableState {
+impl AnimationController {
+    // fn animate_to(&mut self, rect: RectData) {
+    //     let from =
+    //     self.animation = Some(AnimationTransition::new( rect))
+    // }
+
     fn to_400(&mut self) {
         self.animation = Some(AnimationTransition::move_x_linear());
     }
 
-    fn toggle_play_state(&mut self) {
-        self.play_state = self.play_state.toggle();
+    fn abort(&mut self) {
+        self.command = AnimationCommand::Abort;
+    }
+
+    fn play(&mut self) {
+        self.command = AnimationCommand::Play;
+    }
+
+    fn pause(&mut self) {
+        self.command = AnimationCommand::Pause;
     }
 }
 
 #[derive(Clone, PartialEq, Debug)]
-enum AnimationPlayState {
+enum AnimationCommand {
     Play,
     Pause,
-}
-
-impl AnimationPlayState {
-    fn toggle(&self) -> Self {
-        match self {
-            Self::Play => Self::Pause,
-            Self::Pause => Self::Play,
-        }
-    }
+    Abort,
 }
 
 #[component]
-fn Animatable(animation: Signal<AnimatableState>, children: Element) -> Element {
+fn Animatable(controller: Signal<AnimationController>, children: Element) -> Element {
     let mut anim_handle: Signal<Option<Task>> = use_signal(|| None);
     let mut transition: Signal<Option<AnimationTransition>> = use_signal(|| None);
     let mut stopwatch = use_signal(|| Stopwatch::new());
+    let mut delay_stopwatch = use_signal(|| Stopwatch::new());
     let current_rect: Signal<Option<RectData>> = use_signal(|| None);
 
-    use_effect(move || match animation.read().play_state {
-        AnimationPlayState::Play => {
-            if let Some(anim) = &animation.read().animation {
+    use_effect(move || match controller.read().command {
+        AnimationCommand::Play => {
+            if let Some(anim) = &controller.read().animation {
                 if transition.read().is_none() {
                     transition.set(Some(anim.clone()));
                     if let Some(mut current_transition) = transition() {
                         let handle = spawn({
                             let mut current_rect = current_rect.to_owned();
                             async move {
-                                current_transition.start_delay().await;
+                                if let Some(start_delay) = &current_transition.start_delay {
+                                    tracing::info!("SOME DELAY");
+                                    delay_stopwatch.write().start();
+                                    let delay = gloo_timers::future::sleep(*start_delay);
+                                    delay.await;
+                                }
                                 stopwatch.write().start();
                                 current_rect.set(Some(current_transition.from.clone()));
                                 while current_rect.read().as_ref().unwrap()
@@ -283,6 +279,7 @@ fn Animatable(animation: Signal<AnimatableState>, children: Element) -> Element 
                                 anim_handle.set(None);
                                 transition.set(None);
                                 stopwatch.write().clear();
+                                delay_stopwatch.write().clear();
                                 tracing::warn!("ENDED TRANSITION");
                             }
                         });
@@ -296,9 +293,23 @@ fn Animatable(animation: Signal<AnimatableState>, children: Element) -> Element 
                 }
             }
         }
-        AnimationPlayState::Pause => {
+        AnimationCommand::Pause => {
             stopwatch.write().stop(); // don't count pause duration as elapsed animation time
             anim_handle.write().as_mut().map(|handle| handle.pause()); // stop polling loop
+        }
+        AnimationCommand::Abort => {
+            if let Some(delay) = transition().map(|anim| anim.start_delay.clone()).flatten() {
+                let elapsed = delay_stopwatch.write().get_elapsed();
+                if elapsed < delay {
+                    anim_handle.write().as_mut().map(|handle| {
+                        handle.pause();
+                        handle.cancel();
+                    }); // stop polling loop
+                    anim_handle.set(None);
+                    transition.set(None);
+                }
+                delay_stopwatch.write().clear();
+            }
         }
     });
 
