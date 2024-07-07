@@ -44,6 +44,7 @@ dependencies = [
  "dioxus-sdk",
  "futures-util",
  "gloo-timers 0.3.0",
+ "simple-easing",
  "tracing",
  "web-time",
 ]
@@ -1676,6 +1677,12 @@ checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
 ]
+
+[[package]]
+name = "simple-easing"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "832ddd7df0d98d6fd93b973c330b7c8e0742d5cb8f1afc7dea89dba4d2531aa1"
 
 [[package]]
 name = "slab"

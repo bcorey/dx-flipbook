@@ -117,7 +117,8 @@ impl AnimationTransition {
             return self.to.clone();
         }
 
-        let percent = elapsed.as_secs_f64() / max_time.as_secs_f64();
+        let linear_progress = elapsed.as_secs_f64() / max_time.as_secs_f64();
+        let percent = simple_easing::bounce_out(linear_progress as f32) as f64;
         let mut current_rect = self.from.clone();
         let x_diff = self.to.position.x - self.from.position.x;
         current_rect.position.x += x_diff * percent;

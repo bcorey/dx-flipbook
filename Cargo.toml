@@ -17,3 +17,4 @@ web-time = "1.1.0"
 futures-util = "0.3.30"
 gloo-timers = { version = "0.3.0", optional = false, features = ["futures"] }
 dioxus-sdk = { git = "https://github.com/DioxusLabs/sdk.git", features = ["timing"]}
+simple-easing = "1.0.1"
