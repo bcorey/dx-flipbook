@@ -12,9 +12,10 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let mut animatable = use_context_provider(|| Signal::new(AnimatableState::default()));
+    let mut animatable = use_signal(|| AnimatableState::default());
     rsx! {
         Animatable {
+            animation: animatable,
             div {
                 style: "background-color: red; width: 100%; height: 100%;",
             }
@@ -181,13 +182,12 @@ impl AnimationPlayState {
 }
 
 #[component]
-fn Animatable(animation: Option<AnimationTransition>, children: Element) -> Element {
-    let state = use_context::<Signal<AnimatableState>>();
+fn Animatable(animation: Signal<AnimatableState>, children: Element) -> Element {
     let mut anim_handle: Signal<Option<Task>> = use_signal(|| None);
     let current_rect: Signal<Option<RectData>> = use_signal(|| None);
 
     use_effect(move || {
-        if let Some(animation) = &state.read().animation {
+        if let Some(animation) = &animation.read().animation {
             match animation.state {
                 AnimationPlayState::Play => {
                     tracing::info!("some transition");
