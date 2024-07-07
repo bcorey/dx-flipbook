@@ -83,15 +83,62 @@ impl RectSize {
 }
 
 const MAX_RATE_60HZ: u64 = 60;
+
+#[derive(Clone, PartialEq, Debug)]
+struct AnimationDelay {
+    delay_start_time: web_time::SystemTime,
+    duration: web_time::Duration,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct Stopwatch {
+    lap_start: Option<web_time::SystemTime>,
+    elapsed: web_time::Duration,
+}
+
+impl Stopwatch {
+    fn new() -> Self {
+        Self {
+            lap_start: None,
+            elapsed: web_time::Duration::ZERO,
+        }
+    }
+
+    fn stop(&mut self) {
+        self.lap_start = None;
+    }
+
+    fn start(&mut self) {
+        self.lap_start = Some(web_time::SystemTime::now());
+    }
+
+    fn lap(&mut self) {
+        if let Some(lap_start) = self.lap_start {
+            let lap_elapsed = lap_start.elapsed().unwrap();
+            self.elapsed = self.elapsed.checked_add(lap_elapsed).unwrap();
+            self.start();
+        }
+    }
+
+    fn get_elapsed(&mut self) -> web_time::Duration {
+        self.lap();
+        self.elapsed
+    }
+
+    fn clear(&mut self) {
+        self.stop();
+        self.elapsed = web_time::Duration::ZERO;
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 struct AnimationTransition {
     from: RectData,
     to: RectData,
+    start_delay: Option<AnimationDelay>,
     duration: web_time::Duration,
     min_frame_duration: web_time::Duration,
     linear_progress: f32,
-    start_time: web_time::SystemTime,
-    state: AnimationPlayState,
 }
 
 impl AnimationTransition {
@@ -100,11 +147,10 @@ impl AnimationTransition {
         Self {
             from,
             to,
-            duration: web_time::Duration::from_millis(500u64),
+            start_delay: None,
+            duration: web_time::Duration::from_millis(1000u64),
             min_frame_duration,
             linear_progress: 0f32,
-            start_time: web_time::SystemTime::now(),
-            state: AnimationPlayState::Play,
         }
     }
 
@@ -118,13 +164,9 @@ impl AnimationTransition {
         Duration::from_millis(1000 / max_refresh_rate)
     }
 
-    async fn step(&mut self) -> RectData {
+    async fn step(&mut self, total_elapsed: web_time::Duration) -> RectData {
         let frame_start = web_time::SystemTime::now();
-        let total_elapsed = self
-            .start_time
-            .elapsed()
-            .expect("could not get elapsed time since animation start");
-
+        tracing::info!("total elapsed time: {:?}", total_elapsed);
         if total_elapsed >= self.duration {
             return self.to.clone();
         }
@@ -149,6 +191,23 @@ impl AnimationTransition {
         current_rect
     }
 
+    async fn start_delay(&mut self) {
+        if let Some(start_delay) = &self.start_delay {
+            let delay = gloo_timers::future::sleep(start_delay.duration);
+            // start_delay.delay_start_time = web_time::SystemTime::now();
+            // delay.await;
+        }
+    }
+
+    fn cancel_if_during_start_delay(&self) {
+        if let Some(start_delay) = &self.start_delay {
+            let elapsed = start_delay.delay_start_time.elapsed().unwrap();
+            if elapsed < start_delay.duration {
+                tracing::info!("can cancel");
+            }
+        }
+    }
+
     fn move_x_linear() -> Self {
         let from = RectData::new(0f64, 0f64, 200f64, 200f64);
         let to = RectData::new(400f64, 0f64, 200f64, 200f64);
@@ -159,11 +218,15 @@ impl AnimationTransition {
 #[derive(Clone, PartialEq, Debug)]
 struct AnimatableState {
     animation: Option<AnimationTransition>,
+    play_state: AnimationPlayState,
 }
 
 impl Default for AnimatableState {
     fn default() -> Self {
-        Self { animation: None }
+        Self {
+            animation: None,
+            play_state: AnimationPlayState::Play,
+        }
     }
 }
 
@@ -173,9 +236,7 @@ impl AnimatableState {
     }
 
     fn toggle_play_state(&mut self) {
-        self.animation
-            .as_mut()
-            .map(|animation| animation.state = animation.state.toggle());
+        self.play_state = self.play_state.toggle();
     }
 }
 
@@ -197,31 +258,47 @@ impl AnimationPlayState {
 #[component]
 fn Animatable(animation: Signal<AnimatableState>, children: Element) -> Element {
     let mut anim_handle: Signal<Option<Task>> = use_signal(|| None);
+    let mut transition: Signal<Option<AnimationTransition>> = use_signal(|| None);
+    let mut stopwatch = use_signal(|| Stopwatch::new());
     let current_rect: Signal<Option<RectData>> = use_signal(|| None);
 
-    use_effect(move || {
-        if let Some(animation) = &animation.read().animation {
-            match animation.state {
-                AnimationPlayState::Play => {
-                    tracing::info!("some transition");
-                    let handle = spawn({
-                        let mut current_rect = current_rect.to_owned();
-                        let mut animation = animation.to_owned();
-                        async move {
-                            current_rect.set(Some(animation.from.clone()));
-                            while current_rect.read().as_ref().unwrap() != &animation.to {
-                                current_rect.set(Some(animation.step().await));
+    use_effect(move || match animation.read().play_state {
+        AnimationPlayState::Play => {
+            if let Some(anim) = &animation.read().animation {
+                if transition.read().is_none() {
+                    transition.set(Some(anim.clone()));
+                    if let Some(mut current_transition) = transition() {
+                        let handle = spawn({
+                            let mut current_rect = current_rect.to_owned();
+                            async move {
+                                current_transition.start_delay().await;
+                                stopwatch.write().start();
+                                current_rect.set(Some(current_transition.from.clone()));
+                                while current_rect.read().as_ref().unwrap()
+                                    != &current_transition.to
+                                {
+                                    let elapsed = stopwatch.write().get_elapsed();
+                                    current_rect.set(Some(current_transition.step(elapsed).await));
+                                }
+                                anim_handle.set(None);
+                                transition.set(None);
+                                stopwatch.write().clear();
+                                tracing::warn!("ENDED TRANSITION");
                             }
-                            anim_handle.set(None);
-                        }
-                    });
-                    anim_handle.set(Some(handle));
-                }
-                AnimationPlayState::Pause => {
-                    tracing::info!("pausing");
-                    anim_handle.write().as_mut().map(|handle| handle.pause());
+                        });
+                        anim_handle.set(Some(handle));
+                    }
+                } else {
+                    if let Some(active_transition) = transition() {
+                        anim_handle.write().as_mut().map(|handle| handle.resume());
+                        stopwatch.write().start();
+                    }
                 }
             }
+        }
+        AnimationPlayState::Pause => {
+            stopwatch.write().stop(); // don't count pause duration as elapsed animation time
+            anim_handle.write().as_mut().map(|handle| handle.pause()); // stop polling loop
         }
     });
 
