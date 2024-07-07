@@ -1,10 +1,6 @@
 #![allow(non_snake_case)]
 
-use std::thread::current;
-
 use dioxus::prelude::*;
-use dioxus_sdk::utils::timing::use_interval;
-use futures_util::StreamExt;
 use tracing::Level;
 use web_time::Duration;
 
@@ -138,6 +134,12 @@ impl AnimationTransition {
 
         current_rect
     }
+
+    fn move_x_linear() -> Self {
+        let from = RectData::new(0f64, 0f64, 200f64, 200f64);
+        let to = RectData::new(400f64, 0f64, 200f64, 200f64);
+        Self::new(from, to)
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -153,22 +155,13 @@ impl Default for AnimatableState {
 
 impl AnimatableState {
     fn to_400(&mut self) {
-        let from = RectData::new(0f64, 0f64, 200f64, 200f64);
-        let to = RectData::new(400f64, 0f64, 200f64, 200f64);
-        self.animation = Some(AnimationTransition::new(from, to));
+        self.animation = Some(AnimationTransition::move_x_linear());
     }
 
     fn toggle_play_state(&mut self) {
         self.animation
             .as_mut()
             .map(|animation| animation.state = animation.state.toggle());
-    }
-
-    fn render_data(&self) -> String {
-        match &self.animation {
-            Some(animation) => animation.current.to_css(),
-            None => String::new(),
-        }
     }
 }
 
@@ -187,50 +180,35 @@ impl AnimationPlayState {
     }
 }
 
-enum Action {
-    Play,
-    Pause,
-}
-
 #[component]
-fn Animatable(children: Element) -> Element {
+fn Animatable(animation: Option<AnimationTransition>, children: Element) -> Element {
     let state = use_context::<Signal<AnimatableState>>();
-    let anim_handle: Signal<Option<Task>> = use_signal(|| None);
+    let mut anim_handle: Signal<Option<Task>> = use_signal(|| None);
     let current_rect: Signal<Option<RectData>> = use_signal(|| None);
-    let animation_handle = use_coroutine(|mut rx: UnboundedReceiver<AnimationPlayState>| {
-        let state = state.to_owned();
-        let mut anim_handle = anim_handle.to_owned();
-        async move {
-            while let Some(action) = rx.next().await {
-                match action {
-                    AnimationPlayState::Play => {
-                        if let Some(transition) = state.read().animation.clone() {
-                            tracing::info!("some transition");
-                            let handle = spawn({
-                                let mut current_rect = current_rect.to_owned();
-                                async move {
-                                    current_rect.set(Some(transition.from.clone()));
-                                    while current_rect.read().as_ref().unwrap() != &transition.to {
-                                        current_rect.set(Some(transition.step().await));
-                                    }
-                                    anim_handle.set(None);
-                                }
-                            });
-                            anim_handle.set(Some(handle));
-                        }
-                    }
-                    AnimationPlayState::Pause => {
-                        tracing::info!("pausing");
-                        anim_handle.write().as_mut().map(|handle| handle.pause());
-                    }
-                }
-            }
-        }
-    });
 
     use_effect(move || {
         if let Some(animation) = &state.read().animation {
-            animation_handle.send(animation.state.clone());
+            match animation.state {
+                AnimationPlayState::Play => {
+                    tracing::info!("some transition");
+                    let handle = spawn({
+                        let mut current_rect = current_rect.to_owned();
+                        let animation = animation.to_owned();
+                        async move {
+                            current_rect.set(Some(animation.from.clone()));
+                            while current_rect.read().as_ref().unwrap() != &animation.to {
+                                current_rect.set(Some(animation.step().await));
+                            }
+                            anim_handle.set(None);
+                        }
+                    });
+                    anim_handle.set(Some(handle));
+                }
+                AnimationPlayState::Pause => {
+                    tracing::info!("pausing");
+                    anim_handle.write().as_mut().map(|handle| handle.pause());
+                }
+            }
         }
     });
 
