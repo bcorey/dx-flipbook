@@ -1,0 +1,19 @@
+[package]
+name = "animatable"
+version = "0.1.0"
+authors = ["bcorey <benjaminmcorey@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+dioxus = { version = "0.5", features = ["web"] }
+
+# Debug
+tracing = "0.1.40"
+dioxus-logger = "0.5.0"
+web-time = "1.1.0"
+futures-util = "0.3.30"
+gloo-timers = { version = "0.3.0", optional = false, features = ["futures"] }
+dioxus-sdk = { git = "https://github.com/DioxusLabs/sdk.git", features = ["timing"]}
