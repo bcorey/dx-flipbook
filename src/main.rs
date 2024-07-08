@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
+use dioxus_elements::geometry::{euclid::Vector2D, ClientSpace};
 use tracing::Level;
 use web_time::Duration;
 
@@ -49,52 +50,30 @@ fn App() -> Element {
 
 #[derive(Clone, PartialEq, Debug)]
 struct RectData {
-    size: RectSize,
-    position: RectPos,
+    size: Vector2D<f64, ClientSpace>,
+    position: Vector2D<f64, ClientSpace>,
 }
 
 impl RectData {
     fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
         Self {
-            size: RectSize::new(width, height),
-            position: RectPos::new(x, y),
+            size: Vector2D::new(width, height),
+            position: Vector2D::new(x, y),
         }
     }
 
-    fn to_css(&self) -> String {
-        format!("{} {}", self.size.to_css(), self.position.to_css())
-    }
-}
+    fn interpolate_to(&self, t: f32, to: &Self) -> Self {
+        let size = self.size.lerp(to.size, t.into());
+        let position = self.position.lerp(to.position, t.into());
 
-#[derive(Clone, PartialEq, Debug)]
-struct RectPos {
-    x: f64,
-    y: f64,
-}
-
-impl RectPos {
-    fn new(x: f64, y: f64) -> Self {
-        Self { x, y }
+        Self { size, position }
     }
 
     fn to_css(&self) -> String {
-        format!("top: {}px; left: {}px;", self.y, self.x)
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
-struct RectSize {
-    width: f64,
-    height: f64,
-}
-
-impl RectSize {
-    fn new(width: f64, height: f64) -> Self {
-        Self { width, height }
-    }
-
-    fn to_css(&self) -> String {
-        format!("width: {}px; height: {}px;", self.width, self.height)
+        format!(
+            "width: {}px; height: {}px; left: {}px; top: {}px;",
+            self.size.x, self.size.y, self.position.x, self.position.y
+        )
     }
 }
 
@@ -141,6 +120,7 @@ impl Stopwatch {
     }
 }
 
+#[allow(unused)]
 #[derive(Clone, PartialEq, Debug)]
 enum Easing {
     Linear,
@@ -256,18 +236,12 @@ impl AnimationTransition {
 
     async fn step(&mut self, total_elapsed: web_time::Duration) -> RectData {
         let frame_start = web_time::SystemTime::now();
-        tracing::info!("total elapsed time: {:?}", total_elapsed);
-        tracing::info!("animation: {:?}", self);
-        if total_elapsed >= self.duration {
-            return self.to.clone();
-        }
 
-        self.linear_progress = (total_elapsed.as_secs_f64() / self.duration.as_secs_f64()) as f32;
-        let interpolated_progress = self.easing.ease(self.linear_progress) as f64;
+        self.linear_progress =
+            (total_elapsed.as_secs_f64() / self.duration.as_secs_f64()).clamp(0., 1.) as f32;
+        let interpolated_progress = self.easing.ease(self.linear_progress);
 
-        let mut current_rect = self.from.clone();
-        let total_x_diff = self.to.position.x - self.from.position.x;
-        current_rect.position.x += total_x_diff * interpolated_progress;
+        let current_rect = self.from.interpolate_to(interpolated_progress, &self.to);
 
         let frame_duration = frame_start
             .elapsed()
@@ -282,11 +256,15 @@ impl AnimationTransition {
         current_rect
     }
 
+    fn is_finished(&self) -> bool {
+        self.linear_progress >= 1.0
+    }
+
     fn move_x_linear() -> Self {
         let from = RectData::new(0f64, 0f64, 200f64, 200f64);
-        let to = RectData::new(400f64, 0f64, 200f64, 200f64);
+        let to = RectData::new(400f64, 200f64, 200f64, 100f64);
         let duration = web_time::Duration::from_millis(1000);
-        Self::new(from, to, duration, Easing::BackOut)
+        Self::new(from, to, duration, Easing::ElasticOut)
     }
 }
 
@@ -370,12 +348,15 @@ fn Animatable(controller: Signal<AnimationController>, children: Element) -> Ele
                 let delay = gloo_timers::future::sleep(*start_delay);
                 delay.await;
             }
+
             stopwatch.write().start();
             current_rect.set(Some(current_transition.from.clone()));
-            while current_rect.read().as_ref().unwrap() != &current_transition.to {
+            while !current_transition.is_finished() {
                 let elapsed = stopwatch.write().get_elapsed();
                 current_rect.set(Some(current_transition.step(elapsed).await));
             }
+            current_rect.set(Some(current_transition.to));
+            //cleanup
             anim_handle.set(None);
             //transition.set(None);
             stopwatch.write().clear();
