@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, rc::Rc};
 
 #[allow(non_snake_case)]
 use dioxus::prelude::*;
@@ -147,22 +147,24 @@ pub fn Animatable(controller: Signal<AnimationController>, children: Element) ->
 
     // let div_element = use_signal(|| None as Option<Rc<MountedData>>);
 
-    // let read_dims = move |_| async move {
-    //     let read = div_element.read();
-    //     let client_rect = read.as_ref().map(|el| el.get_client_rect());
+    let set_initial_rect = move |data: Rc<MountedData>| async move {
+        let client_rect = data.get_client_rect();
 
-    //     if let Some(client_rect) = client_rect {
-    //         if let Ok(rect) = client_rect.await {
-    //             let converted_data = RectData::new(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
-    //             dimensions.set(Some);
-    //         }
-    //     }
-    // };
+        if let Ok(rect) = client_rect.await {
+            let converted_data = RectData::new(
+                rect.origin.x,
+                rect.origin.y,
+                rect.size.width,
+                rect.size.height,
+            );
+            current_rect.set(Some(converted_data));
+        }
+    };
 
     rsx! {
         div {
             style: "display: flex; position: relative; {render_state}",
-            //onmounted: move |cx|
+            onmounted: move |cx| set_initial_rect(cx.data()),
             {children}
         }
     }

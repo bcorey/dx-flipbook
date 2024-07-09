@@ -16,7 +16,7 @@ impl Default for AnimationBuilder {
         Self {
             from: None,
             to: None,
-            duration: web_time::Duration::from_millis(500),
+            duration: web_time::Duration::from_millis(1000),
             easing: Easing::SineInOut,
             fps_cap: MAX_RATE_60HZ,
         }

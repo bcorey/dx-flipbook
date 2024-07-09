@@ -2,8 +2,8 @@ use dioxus::html::geometry::{euclid::Vector2D, ClientSpace};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct RectData {
-    size: Vector2D<f64, ClientSpace>,
-    position: Vector2D<f64, ClientSpace>,
+    pub size: Vector2D<f64, ClientSpace>,
+    pub position: Vector2D<f64, ClientSpace>,
 }
 
 impl RectData {
