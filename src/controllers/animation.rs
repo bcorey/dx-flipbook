@@ -1,4 +1,5 @@
-use crate::{easing::Easing, rectdata::RectData};
+use crate::easing::Easing;
+use dioxus::html::geometry::euclid::Rect;
 use web_time::Duration;
 
 use super::AnimationBuilder;
@@ -9,8 +10,8 @@ pub const MAX_RATE_120HZ: u64 = 120;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct AnimationTransition {
-    pub from: RectData,
-    pub to: RectData,
+    pub from: Rect<f64, f64>,
+    pub to: Rect<f64, f64>,
     pub easing: Easing,
     duration: web_time::Duration,
     min_frame_duration: web_time::Duration,
@@ -18,7 +19,7 @@ pub struct AnimationTransition {
 }
 
 impl AnimationTransition {
-    pub fn new(builder: AnimationBuilder, from: RectData, to: RectData) -> Self {
+    pub fn new(builder: AnimationBuilder, from: Rect<f64, f64>, to: Rect<f64, f64>) -> Self {
         let min_frame_duration = Self::get_frame_duration_from_refresh_rate(builder.fps_cap);
         Self {
             from,
@@ -34,14 +35,14 @@ impl AnimationTransition {
         Duration::from_millis(1000 / max_refresh_rate)
     }
 
-    pub async fn step(&mut self, total_elapsed: web_time::Duration) -> RectData {
+    pub async fn step(&mut self, total_elapsed: web_time::Duration) -> Rect<f64, f64> {
         let frame_start = web_time::SystemTime::now();
 
         self.linear_progress =
             (total_elapsed.as_secs_f64() / self.duration.as_secs_f64()).clamp(0., 1.) as f32;
-        let interpolated_progress = self.easing.ease(self.linear_progress);
+        let interpolated_progress = self.easing.ease(self.linear_progress) as f64;
 
-        let current_rect = self.from.interpolate_to(interpolated_progress, &self.to);
+        let current_rect = self.from.lerp(self.to, interpolated_progress);
 
         let frame_duration = frame_start
             .elapsed()

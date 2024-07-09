@@ -3,9 +3,9 @@
 use animatable::{
     components::Animatable,
     controllers::{AnimationBuilder, AnimationController},
-    rectdata::RectData,
 };
 use dioxus::prelude::*;
+use dioxus_elements::geometry::euclid::{Point2D, Rect, Size2D};
 use tracing::Level;
 
 fn main() {
@@ -26,7 +26,7 @@ fn App() -> Element {
         }
         button {
             // 'stop and drop all' and start this now.
-            onclick: move |_| animation_controller.write().play_now(AnimationBuilder::default().animate_to(RectData::new(0., 0., 200., 200.,))),
+            onclick: move |_| animation_controller.write().play_now(AnimationBuilder::default().animate_to(Rect::new(Point2D::new(0., 0.), Size2D::new(200., 200.,)))),
             "play now"
         }
         button {

@@ -4,9 +4,9 @@ use animatable::{
     components::Animatable,
     controllers::{AnimationBuilder, AnimationController},
     easing::Easing,
-    rectdata::RectData,
 };
 use dioxus::prelude::*;
+use dioxus_elements::geometry::euclid::{Rect, Size2D};
 use tracing::Level;
 
 fn main() {
@@ -19,16 +19,17 @@ fn main() {
 fn App() -> Element {
     let mut animation_controller = use_signal(|| AnimationController::default());
     let ball_size = use_signal(|| 100f64);
-    let mut target_position = use_signal(|| None as Option<RectData>);
+    let mut target_position = use_signal(|| None as Option<Rect<f64, f64>>);
 
     let mut easing_style = use_signal(|| Easing::BackOut);
 
     let mut mark_target = move |evt: PointerEvent| {
         let coords = evt.data.client_coordinates();
-        let mut to = RectData::new(coords.x, coords.y, ball_size(), ball_size());
+        let ball_size = *ball_size.peek();
+        let mut to = Rect::new(coords.cast_unit(), Size2D::new(ball_size, ball_size));
         target_position.set(Some(to.clone()));
-        to.position.x -= ball_size() / 2.;
-        to.position.y -= ball_size() / 2.;
+        to.origin.x -= ball_size / 2.;
+        to.origin.y -= ball_size / 2.;
         let anim_builder = AnimationBuilder::default()
             .animate_to(to)
             .with_easing(easing_style());
@@ -40,7 +41,7 @@ fn App() -> Element {
             .read()
             .as_ref()
             .map_or(String::new(), |rect| {
-                format!("left: {}px; top: {}px;", rect.position.x, rect.position.y)
+                format!("left: {}px; top: {}px;", rect.origin.x, rect.origin.y)
             })
     });
     rsx! {

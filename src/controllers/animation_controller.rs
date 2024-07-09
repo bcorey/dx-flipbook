@@ -1,11 +1,13 @@
-use crate::{easing::Easing, rectdata::RectData};
+use dioxus::html::geometry::euclid::{Point2D, Rect, Size2D};
+
+use crate::easing::Easing;
 
 use super::{MAX_RATE_120HZ, MAX_RATE_60HZ, MAX_RATE_90HZ};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct AnimationBuilder {
-    pub from: Option<RectData>,
-    pub to: Option<RectData>,
+    pub from: Option<Rect<f64, f64>>,
+    pub to: Option<Rect<f64, f64>>,
     pub duration: web_time::Duration,
     pub easing: Easing,
     pub fps_cap: u64,
@@ -28,12 +30,12 @@ impl AnimationBuilder {
         Self::default().with_duration(delay)
     }
 
-    pub fn animate_from(mut self, from: RectData) -> Self {
+    pub fn animate_from(mut self, from: Rect<f64, f64>) -> Self {
         self.from = Some(from);
         self
     }
 
-    pub fn animate_to(mut self, to: RectData) -> Self {
+    pub fn animate_to(mut self, to: Rect<f64, f64>) -> Self {
         self.to = Some(to);
         self
     }
@@ -79,8 +81,8 @@ impl AnimationController {
 
     pub fn queue_to_400(&mut self) {
         let anim = AnimationBuilder::default()
-            .animate_from(RectData::new(0., 0., 200., 200.))
-            .animate_to(RectData::new(400., 0., 200., 200.))
+            .animate_from(Rect::new(Point2D::new(0., 0.), Size2D::new(200., 200.)))
+            .animate_to(Rect::new(Point2D::new(400., 0.), Size2D::new(200., 200.)))
             .with_duration(web_time::Duration::from_millis(2000));
         self.queue(anim);
     }

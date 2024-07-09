@@ -2,10 +2,10 @@ use std::{collections::VecDeque, rc::Rc};
 
 #[allow(non_snake_case)]
 use dioxus::prelude::*;
+use dioxus_elements::geometry::euclid::Rect;
 
 use crate::{
     controllers::{AnimationBuilder, AnimationCommand, AnimationController, AnimationTransition},
-    rectdata::RectData,
     stopwatch::Stopwatch,
 };
 
@@ -47,7 +47,7 @@ impl AnimationQueue {
 pub fn Animatable(controller: Signal<AnimationController>, children: Element) -> Element {
     let mut anim_handle: Signal<Option<Task>> = use_signal(|| None);
     let mut stopwatch = use_signal(|| Stopwatch::new());
-    let mut current_rect: Signal<Option<RectData>> = use_signal(|| None);
+    let mut current_rect: Signal<Option<Rect<f64, f64>>> = use_signal(|| None);
 
     let mut queue = use_signal(|| AnimationQueue::new());
 
@@ -141,25 +141,19 @@ pub fn Animatable(controller: Signal<AnimationController>, children: Element) ->
     });
 
     let render_state = use_memo(move || {
-        current_rect
-            .read()
-            .as_ref()
-            .map_or(String::new(), |rect| rect.to_css())
+        current_rect.read().as_ref().map_or(String::new(), |rect| {
+            format!(
+                "width: {}px; height: {}px; left: {}px; top: {}px;",
+                rect.size.width, rect.size.height, rect.origin.x, rect.origin.y
+            )
+        })
     });
-
-    // let div_element = use_signal(|| None as Option<Rc<MountedData>>);
 
     let set_initial_rect = move |data: Rc<MountedData>| async move {
         let client_rect = data.get_client_rect();
 
         if let Ok(rect) = client_rect.await {
-            let converted_data = RectData::new(
-                rect.origin.x,
-                rect.origin.y,
-                rect.size.width,
-                rect.size.height,
-            );
-            current_rect.set(Some(converted_data));
+            current_rect.set(Some(rect));
         }
     };
 
