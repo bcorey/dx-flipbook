@@ -76,15 +76,17 @@ pub fn Animatable(controller: Signal<AnimationController>, children: Element) ->
     };
 
     use_effect(move || {
+        // subscribe to anim handle and play the next animation in queue when the current one is done
         if anim_handle.read().is_some() {
             return;
         }
-        tracing::info!("evaluating queue: {:?}", queue.read());
+        let _trigger = queue.read().clone();
+        tracing::info!("evaluating queue: {:?}", _trigger);
         if let Some(anim_builder) = queue.write().pop_front() {
             match (anim_builder.from.clone(), anim_builder.to.clone()) {
                 (_, None) => spawn_delay(anim_builder.duration),
                 (None, Some(to)) => {
-                    let from = current_rect.read().as_ref().unwrap().clone();
+                    let from = current_rect.peek().as_ref().unwrap().clone();
                     let animation = AnimationTransition::new(anim_builder, from, to);
                     spawn_animation(animation);
                 }
