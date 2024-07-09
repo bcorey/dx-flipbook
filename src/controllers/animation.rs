@@ -1,42 +1,33 @@
 use crate::{easing::Easing, rectdata::RectData};
 use web_time::Duration;
 
-const MAX_RATE_60HZ: u64 = 60;
+use super::AnimationBuilder;
+
+pub const MAX_RATE_60HZ: u64 = 60;
+pub const MAX_RATE_90HZ: u64 = 90;
+pub const MAX_RATE_120HZ: u64 = 120;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct AnimationTransition {
     pub from: RectData,
     pub to: RectData,
     pub easing: Easing,
-    pub start_delay: Option<web_time::Duration>,
     duration: web_time::Duration,
     min_frame_duration: web_time::Duration,
     linear_progress: f32,
 }
 
 impl AnimationTransition {
-    pub fn new(from: RectData, to: RectData, duration: web_time::Duration, easing: Easing) -> Self {
-        let min_frame_duration = Self::get_frame_duration_from_refresh_rate(MAX_RATE_60HZ);
+    pub fn new(builder: AnimationBuilder, from: RectData, to: RectData) -> Self {
+        let min_frame_duration = Self::get_frame_duration_from_refresh_rate(builder.fps_cap);
         Self {
             from,
             to,
-            easing,
-            start_delay: None,
-            duration,
+            easing: builder.easing,
+            duration: builder.duration,
             min_frame_duration,
             linear_progress: 0f32,
         }
-    }
-
-    pub fn with_delay(mut self, duration: web_time::Duration) -> Self {
-        self.start_delay = Some(duration);
-        self
-    }
-
-    #[allow(unused)]
-    pub fn with_refresh_rate(mut self, max_refresh_rate: u64) -> Self {
-        self.min_frame_duration = Self::get_frame_duration_from_refresh_rate(max_refresh_rate);
-        self
     }
 
     fn get_frame_duration_from_refresh_rate(max_refresh_rate: u64) -> Duration {
@@ -68,12 +59,5 @@ impl AnimationTransition {
 
     pub fn is_finished(&self) -> bool {
         self.linear_progress >= 1.0
-    }
-
-    pub fn move_x_linear() -> Self {
-        let from = RectData::new(0f64, 0f64, 200f64, 200f64);
-        let to = RectData::new(400f64, 200f64, 200f64, 100f64);
-        let duration = web_time::Duration::from_millis(1000);
-        Self::new(from, to, duration, Easing::ElasticOut)
     }
 }

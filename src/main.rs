@@ -1,6 +1,10 @@
 #![allow(non_snake_case)]
 
-use animatable::{components::Animatable, controllers::AnimationController};
+use animatable::{
+    components::Animatable,
+    controllers::{AnimationBuilder, AnimationController},
+    rectdata::RectData,
+};
 use dioxus::prelude::*;
 use tracing::Level;
 
@@ -21,28 +25,29 @@ fn App() -> Element {
             }
         }
         button {
-            onclick: move |_| animation_controller.write().to_400(),
-            "animate"
+            // 'stop and drop all' and start this now.
+            onclick: move |_| animation_controller.write().play_now(AnimationBuilder::default().animate_to(RectData::new(0., 0., 200., 200.,))),
+            "play now"
         }
         button {
-            onclick: move |_| animation_controller.write().abort(),
-            "abort"
+            // add to waiting animations
+            onclick: move |_| animation_controller.write().queue_to_400(),
+            "queue to 400"
         }
         button {
-            onclick: move |_| animation_controller.write().play(),
-            "play"
+            // resume if paused
+            onclick: move |_| animation_controller.write().resume(),
+            "resume"
         }
         button {
+            //pause if playing
             onclick: move |_| animation_controller.write().pause(),
             "pause"
         }
         button {
-            onclick: move |_| animation_controller.write().reverse(),
-            "reverse"
-        }
-        button {
-            onclick: move |_| animation_controller.write().rest(),
-            "rest"
+            // pause. drop current anim & queue. resume
+            onclick: move |_| animation_controller.write().drop_all(),
+            "stop and drop all"
         }
     }
 }
