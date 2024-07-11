@@ -44,7 +44,11 @@ impl AnimationQueue {
 }
 
 #[component]
-pub fn Animatable(controller: Signal<AnimationController>, children: Element) -> Element {
+pub fn Animatable(
+    controller: Signal<AnimationController>,
+    style: Option<String>,
+    children: Element,
+) -> Element {
     let mut anim_handle: Signal<Option<Task>> = use_signal(|| None);
     let mut stopwatch = use_signal(|| Stopwatch::new());
     let mut current_rect: Signal<Option<Rect<f64, f64>>> = use_signal(|| None);
@@ -146,12 +150,16 @@ pub fn Animatable(controller: Signal<AnimationController>, children: Element) ->
     });
 
     let render_state = use_memo(move || {
-        current_rect.read().as_ref().map_or(String::new(), |rect| {
+        let mut position = current_rect.read().as_ref().map_or(String::new(), |rect| {
             format!(
                 "width: {}px; height: {}px; left: {}px; top: {}px;",
                 rect.size.width, rect.size.height, rect.origin.x, rect.origin.y
             )
-        })
+        });
+        if let Some(style) = &style {
+            position = format!("{} {}", position, style);
+        }
+        position
     });
 
     let set_initial_rect = move |data: Rc<MountedData>| async move {
