@@ -62,19 +62,38 @@ impl AnimationBuilder {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub enum AnimationControllerStatus {
+    Busy,
+    Resting,
+}
+#[derive(Clone, PartialEq, Debug)]
 pub struct AnimationController {
+    pub status: AnimationControllerStatus,
     pub command: AnimationCommand,
 }
 
 impl Default for AnimationController {
     fn default() -> Self {
         Self {
+            status: AnimationControllerStatus::Resting,
             command: AnimationCommand::None,
         }
     }
 }
 
 impl AnimationController {
+    pub fn is_finished(&self) -> bool {
+        self.status == AnimationControllerStatus::Resting
+    }
+
+    pub fn set_busy(&mut self) {
+        self.status = AnimationControllerStatus::Busy;
+    }
+
+    pub fn set_resting(&mut self) {
+        self.status = AnimationControllerStatus::Resting;
+    }
+
     pub fn queue(&mut self, anim: AnimationBuilder) {
         self.command = AnimationCommand::Queue(anim);
     }
@@ -101,6 +120,10 @@ impl AnimationController {
 
     pub fn drop_all(&mut self) {
         self.command = AnimationCommand::DropAll;
+    }
+
+    pub fn clear_command(&mut self) {
+        self.command = AnimationCommand::None;
     }
 }
 

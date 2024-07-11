@@ -17,6 +17,8 @@ fn main() {
 #[component]
 fn App() -> Element {
     let mut animation_controller = use_signal(|| AnimationController::default());
+
+    let is_resting = use_memo(move || animation_controller.read().is_finished());
     rsx! {
         Animatable {
             controller: animation_controller,
@@ -48,6 +50,9 @@ fn App() -> Element {
             // pause. drop current anim & queue. resume
             onclick: move |_| animation_controller.write().drop_all(),
             "stop and drop all"
+        }
+        p {
+            "is resting: {is_resting}",
         }
     }
 }

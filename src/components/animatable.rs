@@ -83,6 +83,7 @@ pub fn Animatable(controller: Signal<AnimationController>, children: Element) ->
         let _trigger = queue.read().clone();
         tracing::info!("evaluating queue: {:?}", _trigger);
         if let Some(anim_builder) = queue.write().pop_front() {
+            controller.write().set_busy();
             match (anim_builder.from.clone(), anim_builder.to.clone()) {
                 (_, None) => spawn_delay(anim_builder.duration),
                 (None, Some(to)) => {
@@ -95,6 +96,8 @@ pub fn Animatable(controller: Signal<AnimationController>, children: Element) ->
                     spawn_animation(animation);
                 }
             }
+        } else {
+            controller.write().set_resting();
         }
     });
 
@@ -114,26 +117,27 @@ pub fn Animatable(controller: Signal<AnimationController>, children: Element) ->
                     stopwatch.write().start();
                 }
             }
-            controller.write().command = AnimationCommand::None;
+            controller.write().clear_command();
         }
         AnimationCommand::Pause => {
             stopwatch.write().stop(); // don't count pause duration as elapsed animation time
             anim_handle.write().as_mut().map(|handle| handle.pause()); // stop polling loop
-            controller.write().command = AnimationCommand::None;
+            controller.write().clear_command();
         }
         AnimationCommand::DropAll => {
             clear_hooks();
             queue.write().drop_all();
-            controller.write().command = AnimationCommand::None;
+            controller.write().clear_command();
+            controller.write().set_resting();
         }
         AnimationCommand::Queue(anim) => {
             queue.write().push(anim);
-            controller.write().command = AnimationCommand::None;
+            controller.write().clear_command();
         }
         AnimationCommand::PlayNow(anim) => {
             clear_hooks();
             queue.write().play_now(anim);
-            controller.write().command = AnimationCommand::None;
+            controller.write().clear_command();
         }
         AnimationCommand::None => {
             tracing::info!("no command");
