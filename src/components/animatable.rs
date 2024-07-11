@@ -139,6 +139,7 @@ pub fn Animatable(controller: Signal<AnimationController>, children: Element) ->
             queue.write().play_now(anim);
             controller.write().clear_command();
         }
+        AnimationCommand::SetRect(rect) => current_rect.set(Some(rect)),
         AnimationCommand::None => {
             tracing::info!("no command");
         }

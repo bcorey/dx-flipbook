@@ -122,6 +122,10 @@ impl AnimationController {
         self.command = AnimationCommand::DropAll;
     }
 
+    pub fn set_rect(&mut self, rect: Rect<f64, f64>) {
+        self.command = AnimationCommand::SetRect(rect);
+    }
+
     pub fn clear_command(&mut self) {
         self.command = AnimationCommand::None;
     }
@@ -134,5 +138,6 @@ pub enum AnimationCommand {
     PlayNow(AnimationBuilder),
     DropAll,
     Queue(AnimationBuilder),
+    SetRect(Rect<f64, f64>),
     None,
 }
