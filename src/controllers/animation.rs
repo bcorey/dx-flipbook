@@ -54,7 +54,7 @@ impl AnimationTransition {
                 gloo_timers::future::sleep(web_time::Duration::from_millis(delay_duration as u64));
             delay.await;
         }
-
+        tracing::info!("animation frame exec: {:?}", &current_rect);
         current_rect
     }
 

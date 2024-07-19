@@ -68,20 +68,26 @@ pub enum AnimationControllerStatus {
 }
 #[derive(Clone, PartialEq, Debug)]
 pub struct AnimationController {
-    pub status: AnimationControllerStatus,
-    pub command: AnimationCommand,
+    status: AnimationControllerStatus,
+    rect: Option<Rect<f64, f64>>,
+    command: AnimationCommand,
 }
 
 impl Default for AnimationController {
     fn default() -> Self {
         Self {
             status: AnimationControllerStatus::Resting,
+            rect: None,
             command: AnimationCommand::None,
         }
     }
 }
 
 impl AnimationController {
+    pub fn get_status(&self) -> AnimationControllerStatus {
+        self.status.clone()
+    }
+
     pub fn is_finished(&self) -> bool {
         self.status == AnimationControllerStatus::Resting
     }
@@ -126,8 +132,20 @@ impl AnimationController {
         self.command = AnimationCommand::SetRect(rect);
     }
 
+    pub fn get_rect(&self) -> Option<Rect<f64, f64>> {
+        self.rect
+    }
+
+    pub fn private_set_rect(&mut self, rect: Rect<f64, f64>) {
+        self.rect = Some(rect);
+    }
+
     pub fn clear_command(&mut self) {
         self.command = AnimationCommand::None;
+    }
+
+    pub fn get_command(&self) -> AnimationCommand {
+        self.command.clone()
     }
 }
 

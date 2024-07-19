@@ -34,6 +34,10 @@ impl AnimationQueue {
         self.queue.push_back(anim);
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
+
     pub fn pop_front(&mut self) -> Option<AnimationBuilder> {
         self.queue.pop_front()
     }
@@ -55,9 +59,24 @@ pub fn Animatable(
 
     let mut queue = use_signal(|| AnimationQueue::new());
 
+    use_effect(move || {
+        if let Some(cur_rect) = current_rect.read().as_ref() {
+            let controller_rect_is_stale = controller
+                .peek()
+                .get_rect()
+                .as_ref()
+                .map_or(true, |rect| rect != cur_rect);
+
+            if controller_rect_is_stale {
+                controller.write().private_set_rect(*cur_rect);
+            }
+        }
+    });
+
     let mut spawn_animation = move |mut current_transition: AnimationTransition| {
         let handle = spawn(async move {
             stopwatch.write().start();
+            tracing::info!("starting anim from: {:?}", current_rect.peek());
             current_rect.set(Some(current_transition.from.clone()));
             while !current_transition.is_finished() {
                 let elapsed = stopwatch.write().get_elapsed();
@@ -67,6 +86,7 @@ pub fn Animatable(
             //cleanup
             anim_handle.set(None);
             stopwatch.write().clear();
+            controller.write().set_resting();
         });
         anim_handle.set(Some(handle));
     };
@@ -84,14 +104,20 @@ pub fn Animatable(
         if anim_handle.read().is_some() {
             return;
         }
-        let _trigger = queue.read().clone();
-        tracing::info!("evaluating queue: {:?}", _trigger);
+        let trigger = queue.read().clone();
+        if trigger.is_empty() {
+            return;
+        }
+        tracing::info!("evaluating queue: {:?}", trigger);
         if let Some(anim_builder) = queue.write().pop_front() {
-            controller.write().set_busy();
             match (anim_builder.from.clone(), anim_builder.to.clone()) {
                 (_, None) => spawn_delay(anim_builder.duration),
                 (None, Some(to)) => {
                     let from = current_rect.peek().as_ref().unwrap().clone();
+                    if from == to {
+                        tracing::error!("requested animation has same origin and destination");
+                        return;
+                    }
                     let animation = AnimationTransition::new(anim_builder, from, to);
                     spawn_animation(animation);
                 }
@@ -100,8 +126,6 @@ pub fn Animatable(
                     spawn_animation(animation);
                 }
             }
-        } else {
-            controller.write().set_resting();
         }
     });
 
@@ -111,7 +135,7 @@ pub fn Animatable(
         stopwatch.write().clear();
     };
 
-    use_effect(move || match controller().command {
+    use_effect(move || match controller().get_command() {
         AnimationCommand::Resume => {
             tracing::info!("command: play: paused animation");
 
@@ -140,10 +164,16 @@ pub fn Animatable(
         }
         AnimationCommand::PlayNow(anim) => {
             clear_hooks();
+            controller.write().set_busy();
+            tracing::info!("play now! {:?}", anim);
             queue.write().play_now(anim);
             controller.write().clear_command();
         }
-        AnimationCommand::SetRect(rect) => current_rect.set(Some(rect)),
+        AnimationCommand::SetRect(rect) => {
+            if anim_handle.peek().is_none() {
+                current_rect.set(Some(rect));
+            }
+        }
         AnimationCommand::None => {
             tracing::info!("no command");
         }
@@ -157,10 +187,11 @@ pub fn Animatable(
             )
         });
         if let Some(style) = &style {
-            position = format!("{} {}", position, style);
+            position = format!("{} {}", style, position);
         }
         position
-    });
+    })
+    .to_string();
 
     let set_initial_rect = move |data: Rc<MountedData>| async move {
         let client_rect = data.get_client_rect();
@@ -172,7 +203,7 @@ pub fn Animatable(
 
     rsx! {
         div {
-            style: "display: flex; position: relative; {render_state}",
+            style: "display: flex; position: absolute; {render_state}",
             onmounted: move |cx| set_initial_rect(cx.data()),
             {children}
         }
