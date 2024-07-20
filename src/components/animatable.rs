@@ -26,6 +26,7 @@ impl AnimationQueue {
     }
 
     pub fn play_now(&mut self, anim: AnimationBuilder) {
+        tracing::info!("play now from queue");
         self.drop_all();
         self.push(anim);
     }
@@ -58,23 +59,20 @@ pub fn Animatable(
     let mut current_rect: Signal<Option<Rect<f64, f64>>> = use_signal(|| None);
 
     let mut queue = use_signal(|| AnimationQueue::new());
-
+    let controller_rect_is_stale =
+        use_memo(move || current_rect.read().as_ref() != controller.peek().get_rect().as_ref());
     use_effect(move || {
-        if let Some(cur_rect) = current_rect.read().as_ref() {
-            let controller_rect_is_stale = controller
-                .peek()
-                .get_rect()
-                .as_ref()
-                .map_or(true, |rect| rect != cur_rect);
-
-            if controller_rect_is_stale {
-                controller.write().private_set_rect(*cur_rect);
+        let stale = controller_rect_is_stale();
+        if let Some(cur_rect) = current_rect.peek().clone() {
+            if stale {
+                controller.write().private_set_rect(cur_rect);
             }
         }
     });
 
     let mut spawn_animation = move |mut current_transition: AnimationTransition| {
         let handle = spawn(async move {
+            controller.write().set_busy();
             stopwatch.write().start();
             tracing::info!("starting anim from: {:?}", current_rect.peek());
             current_rect.set(Some(current_transition.from.clone()));
@@ -99,16 +97,9 @@ pub fn Animatable(
         anim_handle.set(Some(handle));
     };
 
-    use_effect(move || {
-        // subscribe to anim handle and play the next animation in queue when the current one is done
-        if anim_handle.read().is_some() {
-            return;
-        }
-        let trigger = queue.read().clone();
-        if trigger.is_empty() {
-            return;
-        }
-        tracing::info!("evaluating queue: {:?}", trigger);
+    let mut parse_queue = move || {
+        tracing::info!("evaluating queue: {:?}", queue.peek());
+
         if let Some(anim_builder) = queue.write().pop_front() {
             match (anim_builder.from.clone(), anim_builder.to.clone()) {
                 (_, None) => spawn_delay(anim_builder.duration),
@@ -127,6 +118,21 @@ pub fn Animatable(
                 }
             }
         }
+    };
+
+    use_effect(move || {
+        // subscribe to anim handle and play the next animation in queue when the current one is done
+        tracing::info!("reading queue and handle");
+        let queue_read = queue.read().clone();
+        if anim_handle.read().is_some() {
+            tracing::info!("handle is empty");
+            return;
+        }
+        if queue_read.is_empty() {
+            tracing::info!("queue is empty");
+            return;
+        }
+        parse_queue();
     });
 
     let mut clear_hooks = move || {
@@ -135,47 +141,51 @@ pub fn Animatable(
         stopwatch.write().clear();
     };
 
-    use_effect(move || match controller().get_command() {
-        AnimationCommand::Resume => {
-            tracing::info!("command: play: paused animation");
+    use_effect(move || {
+        let cmd = controller().get_command();
+        tracing::info!("processing command {:?}", cmd);
+        match cmd {
+            AnimationCommand::Resume => {
+                tracing::info!("command: play: paused animation");
 
-            if let Some(handle) = anim_handle() {
-                if handle.paused() {
-                    handle.resume();
-                    stopwatch.write().start();
+                if let Some(handle) = anim_handle() {
+                    if handle.paused() {
+                        handle.resume();
+                        stopwatch.write().start();
+                    }
                 }
+                controller.write().clear_command();
             }
-            controller.write().clear_command();
-        }
-        AnimationCommand::Pause => {
-            stopwatch.write().stop(); // don't count pause duration as elapsed animation time
-            anim_handle.write().as_mut().map(|handle| handle.pause()); // stop polling loop
-            controller.write().clear_command();
-        }
-        AnimationCommand::DropAll => {
-            clear_hooks();
-            queue.write().drop_all();
-            controller.write().clear_command();
-            controller.write().set_resting();
-        }
-        AnimationCommand::Queue(anim) => {
-            queue.write().push(anim);
-            controller.write().clear_command();
-        }
-        AnimationCommand::PlayNow(anim) => {
-            clear_hooks();
-            controller.write().set_busy();
-            tracing::info!("play now! {:?}", anim);
-            queue.write().play_now(anim);
-            controller.write().clear_command();
-        }
-        AnimationCommand::SetRect(rect) => {
-            if anim_handle.peek().is_none() {
-                current_rect.set(Some(rect));
+            AnimationCommand::Pause => {
+                stopwatch.write().stop(); // don't count pause duration as elapsed animation time
+                anim_handle.write().as_mut().map(|handle| handle.pause()); // stop polling loop
+                controller.write().clear_command();
             }
-        }
-        AnimationCommand::None => {
-            tracing::info!("no command");
+            AnimationCommand::DropAll => {
+                clear_hooks();
+                queue.write().drop_all();
+                controller.write().clear_command();
+                controller.write().set_resting();
+            }
+            AnimationCommand::Queue(anim) => {
+                queue.write().push(anim);
+                controller.write().clear_command();
+            }
+            AnimationCommand::PlayNow(anim) => {
+                clear_hooks();
+                controller.write().set_busy();
+                queue.write().play_now(anim);
+                tracing::info!("play now!");
+                parse_queue();
+                controller.write().clear_command();
+            }
+            AnimationCommand::SetRect(rect) => {
+                if anim_handle.peek().is_none() {
+                    current_rect.set(Some(rect));
+                }
+                controller.write().clear_command();
+            }
+            AnimationCommand::None => {}
         }
     });
 
