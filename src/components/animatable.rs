@@ -12,7 +12,7 @@ pub fn Animatable(
     let render_state = use_memo(move || {
         let mut state = controller.read().read_render_state();
         if let Some(style) = &style {
-            state = format!("{}{}", style, state);
+            state = format!("{} {}", style, state);
         }
         state
     });

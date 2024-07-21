@@ -38,7 +38,7 @@ pub struct UseFlipbook {
 }
 
 impl UseFlipbook {
-    pub fn read_render_state(&self) -> String {
+    pub(crate) fn read_render_state(&self) -> String {
         self.current_rect
             .read()
             .as_ref()
@@ -49,6 +49,7 @@ impl UseFlipbook {
                 )
             })
     }
+
     pub fn set_mounted_data(&mut self, data: Rc<MountedData>) {
         self.mounted.set(Some(data));
     }
@@ -58,15 +59,11 @@ impl UseFlipbook {
     }
 
     pub fn read_rect(&self) -> Option<Rect<f64, f64>> {
-        self.current_rect.peek().clone()
+        self.current_rect.read().clone()
     }
 
     pub fn set_rect(&mut self, rect: Rect<f64, f64>) {
         self.command.set(FlipbookCommand::SetRect(rect));
-    }
-
-    pub fn priv_set_rect(&mut self, rect: Rect<f64, f64>) {
-        self.current_rect.set(Some(rect));
     }
 
     pub fn peek_status(&self) -> FlipbookStatus {
@@ -74,7 +71,7 @@ impl UseFlipbook {
     }
 
     pub fn read_status(&self) -> FlipbookStatus {
-        self.status.peek().clone()
+        self.status.read().clone()
     }
 
     pub fn peek_is_finished(&self) -> bool {
@@ -82,7 +79,7 @@ impl UseFlipbook {
     }
 
     pub fn read_is_finished(&self) -> bool {
-        self.status.peek().clone() == FlipbookStatus::Resting
+        self.status.read().clone() == FlipbookStatus::Resting
     }
 
     pub fn queue(&mut self, anim: AnimationBuilder) {
