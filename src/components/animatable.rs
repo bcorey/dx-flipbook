@@ -63,10 +63,11 @@ pub fn Animatable(
         use_memo(move || current_rect.read().as_ref() != controller.peek().get_rect().as_ref());
     use_effect(move || {
         let stale = controller_rect_is_stale();
+        if !stale {
+            return;
+        }
         if let Some(cur_rect) = current_rect.peek().clone() {
-            if stale {
-                controller.write().private_set_rect(cur_rect);
-            }
+            controller.write().private_set_rect(cur_rect);
         }
     });
 
@@ -74,7 +75,6 @@ pub fn Animatable(
         let handle = spawn(async move {
             controller.write().set_busy();
             stopwatch.write().start();
-            tracing::info!("starting anim from: {:?}", current_rect.peek());
             current_rect.set(Some(current_transition.from.clone()));
             while !current_transition.is_finished() {
                 let elapsed = stopwatch.write().get_elapsed();
