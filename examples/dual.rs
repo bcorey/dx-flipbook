@@ -1,6 +1,6 @@
 use animatable::{
     components::Animatable,
-    controllers::{AnimationBuilder, AnimationController},
+    controllers::{use_flipbook_signal, AnimationBuilder},
 };
 use dioxus::prelude::*;
 use dioxus_elements::geometry::euclid::{Point2D, Rect, Size2D};
@@ -14,8 +14,8 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let mut ctrl_1 = use_signal(|| AnimationController::default());
-    let mut ctrl_2 = use_signal(|| AnimationController::default());
+    let mut ctrl_1 = use_flipbook_signal();
+    let mut ctrl_2 = use_flipbook_signal();
 
     let mut play_both = move || {
         let end_1 = Point2D::new(400f64, 0f64);

@@ -2,7 +2,7 @@
 
 use animatable::{
     components::Animatable,
-    controllers::{AnimationBuilder, AnimationController},
+    controllers::{use_flipbook_signal, AnimationBuilder},
     easing::Easing,
 };
 use dioxus::prelude::*;
@@ -17,7 +17,7 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let mut animation_controller = use_signal(|| AnimationController::default());
+    let mut animation_controller = use_flipbook_signal();
     let ball_size = use_signal(|| 100f64);
     let mut target_position = use_signal(|| None as Option<Rect<f64, f64>>);
 

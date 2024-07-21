@@ -2,7 +2,7 @@
 
 use animatable::{
     components::Animatable,
-    controllers::{AnimationBuilder, AnimationController},
+    controllers::{use_flipbook_signal, AnimationBuilder},
 };
 use dioxus::prelude::*;
 use dioxus_elements::geometry::euclid::{Point2D, Rect, Size2D};
@@ -16,9 +16,9 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let mut animation_controller = use_signal(|| AnimationController::default());
+    let mut animation_controller = use_flipbook_signal();
 
-    let is_resting = use_memo(move || animation_controller.read().is_finished());
+    let is_resting = use_memo(move || animation_controller.read().read_is_finished());
     rsx! {
         Animatable {
             controller: animation_controller,
@@ -33,7 +33,7 @@ fn App() -> Element {
         }
         button {
             // add to waiting animations
-            onclick: move |_| animation_controller.write().queue_to_400(),
+            //onclick: move |_| animation_controller.queue_to_400(),
             "queue to 400"
         }
         button {
