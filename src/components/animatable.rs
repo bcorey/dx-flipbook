@@ -3,6 +3,12 @@ use dioxus::prelude::*;
 
 use crate::controllers::UseFlipbook;
 
+const ANIMATABLE_BASE_STATE: &'static str = r#"
+    display: flex;
+    position: absolute; 
+    box-sizing: border-box;
+"#;
+
 #[component]
 pub fn Animatable(
     controller: Signal<UseFlipbook>,
@@ -14,11 +20,13 @@ pub fn Animatable(
         if let Some(style) = &style {
             state = format!("{} {}", style, state);
         }
+        state = format!("{}{}", ANIMATABLE_BASE_STATE, state);
+        tracing::info!("animatable state {:?}", state);
         state
     });
     rsx! {
         div {
-            style: "display: flex; position: absolute; {render_state}",
+            style: "{render_state}",
             onmounted: move |cx| controller.write().set_mounted_data(cx.data()),
             {children}
         }

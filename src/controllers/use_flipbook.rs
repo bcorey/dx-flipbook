@@ -8,7 +8,7 @@ use dioxus::{
     signals::{Readable, Signal, Writable},
 };
 
-use crate::{controllers::AnimationQueue, stopwatch::Stopwatch};
+use crate::{controllers::AnimationQueue, stopwatch::use_stopwatch_signal};
 
 use super::{AnimationBuilder, AnimationTransition};
 
@@ -38,11 +38,13 @@ pub struct UseFlipbook {
 }
 
 impl UseFlipbook {
+    /// position is relative until the rect is read from MountedData.
+    /// then the position and size are controlled by the animatable and the position is absolute.
     pub(crate) fn read_render_state(&self) -> String {
         self.current_rect
             .read()
             .as_ref()
-            .map_or(String::new(), |rect| {
+            .map_or("position: relative;".to_string(), |rect| {
                 format!(
                     "width: {}px; height: {}px; left: {}px; top: {}px;",
                     rect.size.width, rect.size.height, rect.origin.x, rect.origin.y
@@ -109,9 +111,10 @@ fn use_flipbook() -> UseFlipbook {
     let mut command = use_signal(|| FlipbookCommand::None);
 
     let mut anim_handle: Signal<Option<Task>> = use_signal(|| None);
-    let mut stopwatch = use_signal(|| Stopwatch::new());
+    let mut stopwatch = use_stopwatch_signal();
 
     let mut queue = use_signal(|| AnimationQueue::new());
+
     let mounted = use_signal(|| None as Option<Rc<MountedData>>);
     let read_mounted = move |data: Option<Rc<MountedData>>| async move {
         let client_rect = data.as_ref().map(|el| el.get_client_rect());
@@ -129,6 +132,7 @@ fn use_flipbook() -> UseFlipbook {
             read_mounted(read).await;
         });
     });
+
     let mut spawn_animation = move |mut current_transition: AnimationTransition| {
         let handle = spawn(async move {
             status.set(FlipbookStatus::Busy);
@@ -261,6 +265,5 @@ fn use_flipbook() -> UseFlipbook {
 
 pub fn use_flipbook_signal() -> Signal<UseFlipbook> {
     let ctrl = use_flipbook();
-    let flipbook = use_signal(|| ctrl);
-    flipbook
+    use_signal(|| ctrl)
 }

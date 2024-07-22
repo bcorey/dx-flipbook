@@ -1,3 +1,5 @@
+use dioxus::{hooks::use_signal, signals::Signal};
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Stopwatch {
     lap_start: Option<web_time::SystemTime>,
@@ -5,7 +7,7 @@ pub struct Stopwatch {
 }
 
 impl Stopwatch {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             lap_start: None,
             elapsed: web_time::Duration::ZERO,
@@ -13,6 +15,7 @@ impl Stopwatch {
     }
 
     pub fn stop(&mut self) {
+        self.lap();
         self.lap_start = None;
     }
 
@@ -37,4 +40,8 @@ impl Stopwatch {
         self.stop();
         self.elapsed = web_time::Duration::ZERO;
     }
+}
+
+pub fn use_stopwatch_signal() -> Signal<Stopwatch> {
+    use_signal(|| Stopwatch::new())
 }
