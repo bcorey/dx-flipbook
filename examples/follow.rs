@@ -1,12 +1,11 @@
 #![allow(non_snake_case)]
 
-use animatable::{
-    components::Animatable,
-    controllers::{use_flipbook_signal, AnimationBuilder},
-    easing::Easing,
-};
 use dioxus::prelude::*;
 use dioxus_elements::geometry::euclid::{Rect, Size2D};
+use dx_flipbook::{
+    components::Animatable, controllers::AnimationBuilder, easing::Easing,
+    hooks::use_flipbook_signal,
+};
 use tracing::Level;
 
 fn main() {

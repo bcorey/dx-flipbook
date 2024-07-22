@@ -1,7 +1,7 @@
 #[allow(non_snake_case)]
 use dioxus::prelude::*;
 
-use crate::controllers::UseFlipbook;
+use crate::hooks::UseFlipbook;
 
 const ANIMATABLE_BASE_STATE: &'static str = r#"
     display: flex;

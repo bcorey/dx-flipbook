@@ -8,9 +8,10 @@ use dioxus::{
     signals::{Readable, Signal, Writable},
 };
 
-use crate::{controllers::AnimationQueue, stopwatch::use_stopwatch_signal};
-
-use super::{AnimationBuilder, AnimationTransition};
+use crate::{
+    controllers::{AnimationBuilder, AnimationQueue, AnimationTransition},
+    stopwatch::use_stopwatch_signal,
+};
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum FlipbookStatus {
